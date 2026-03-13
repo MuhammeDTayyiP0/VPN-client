@@ -66,13 +66,13 @@ class VpnEngine {
         const fileName = `sing-box-${version}-${platform}-${arch}`;
         const url = `https://github.com/SagerNet/sing-box/releases/download/v${version}/${fileName}${ext}`;
 
-        const downloadPath = path.join(binDir, `sing-box${ext}`);
+        const downloadPath = path.join(binDir, `sing-box_dl${ext}`);
 
         return new Promise((resolve, reject) => {
             console.log(`[VPN Engine] Downloading sing-box from ${url}`);
 
             const download = (downloadUrl, redirectCount = 0) => {
-                if (redirectCount > 5) return reject(new Error('Too many redirects'));
+                if (redirectCount > 5) return reject(new Error('Çok fazla yönlendirme (redirect).'));
 
                 const client = downloadUrl.startsWith('https') ? https : http;
                 client.get(downloadUrl, (response) => {
@@ -81,25 +81,39 @@ class VpnEngine {
                     }
 
                     if (response.statusCode !== 200) {
-                        return reject(new Error(`Download failed: ${response.statusCode}`));
+                        return reject(new Error(`İndirme başarısız: HTTP ${response.statusCode}`));
                     }
 
                     const file = fs.createWriteStream(downloadPath);
                     response.pipe(file);
 
                     file.on('finish', () => {
-                        file.close();
-                        try {
-                            this.extractBinary(downloadPath, binDir, fileName);
-                            // Clean up archive
-                            try { fs.unlinkSync(downloadPath); } catch (e) { /* ignore */ }
-                            console.log('[VPN Engine] sing-box downloaded and extracted.');
-                            resolve({ exists: true, path: this.getBinPath() });
-                        } catch (e) {
-                            reject(new Error('Extract failed: ' + e.message));
-                        }
+                        file.close(async () => {
+                            try {
+                                const stats = fs.statSync(downloadPath);
+                                if (stats.size < 1000000) { // Should be at least 1MB
+                                    throw new Error(`İndirilen dosya çok küçük (${stats.size} bytes). İndirme tamamlanamamış olabilir.`);
+                                }
+
+                                console.log(`[VPN Engine] Downloaded ${stats.size} bytes. Starting extraction...`);
+                                this.extractBinary(downloadPath, binDir, fileName);
+                                
+                                // Clean up archive
+                                try { fs.unlinkSync(downloadPath); } catch (e) { /* ignore */ }
+                                resolve({ exists: true, path: this.getBinPath() });
+                            } catch (e) {
+                                reject(new Error('Çıkarma hatası: ' + e.message));
+                            }
+                        });
                     });
-                }).on('error', reject);
+
+                    file.on('error', (err) => {
+                        try { fs.unlinkSync(downloadPath); } catch (e) {}
+                        reject(new Error('Dosya yazma hatası: ' + err.message));
+                    });
+                }).on('error', (err) => {
+                    reject(new Error('Bağlantı hatası: ' + err.message));
+                });
             };
 
             download(url);
@@ -112,71 +126,90 @@ class VpnEngine {
         const finalBinPath = path.join(targetDir, finalBinName);
 
         const { execSync } = require('child_process');
-        const tempExtract = path.join(targetDir, '_extract_temp_' + Date.now());
+        const tempExtract = path.join(targetDir, '_tmp_ext_' + Date.now());
+        
+        if (fs.existsSync(tempExtract)) fs.rmSync(tempExtract, { recursive: true, force: true });
         fs.mkdirSync(tempExtract, { recursive: true });
 
-        console.log(`[VPN Engine] Extraction started. Target: ${finalBinName}, Temp: ${tempExtract}`);
+        console.log(`[VPN Engine] Extracting to: ${tempExtract}`);
 
         try {
             if (isWin) {
-                console.log('[VPN Engine] Extracting zip via PowerShell...');
-                execSync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${tempExtract}' -Force"`, {
-                    windowsHide: true,
-                    stdio: 'inherit'
-                });
+                // Try 'tar' first on Windows 10/11 (much faster/reliable than PS)
+                let tarWorked = false;
+                try {
+                    console.log('[VPN Engine] Trying extraction via tar...');
+                    execSync(`tar -xf "${archivePath}" -C "${tempExtract}"`, { windowsHide: true, stdio: 'ignore' });
+                    tarWorked = true;
+                } catch (e) {
+                    console.log('[VPN Engine] tar not available or failed, falling back to PowerShell...');
+                }
+
+                if (!tarWorked) {
+                    // Quoting fix for PowerShell
+                    const psCommand = `powershell -Command "Expand-Archive -Path \\"${archivePath}\\" -DestinationPath \\"${tempExtract}\\" -Force"`;
+                    execSync(psCommand, { windowsHide: true, stdio: 'pipe' });
+                }
             } else {
-                console.log('[VPN Engine] Extracting tar.gz via tar...');
-                execSync(`tar -xzf "${archivePath}" -C "${tempExtract}"`, { stdio: 'inherit' });
+                console.log('[VPN Engine] Extracting via tar...');
+                execSync(`tar -xzf "${archivePath}" -C "${tempExtract}"`, { stdio: 'pipe' });
             }
 
-            console.log('[VPN Engine] Extraction finished. Searching for binary...');
+            // RECURSIVE SEARCH WITH PROTECTION
+            const findFile = (dir) => {
+                let items;
+                try {
+                    items = fs.readdirSync(dir);
+                } catch (e) {
+                    console.warn(`[VPN Engine] Cannot read directory ${dir}: ${e.message}`);
+                    return null;
+                }
 
-            // SMART SEARCH: Recursively find the binary file
-            const findFile = (dir, name) => {
-                const files = fs.readdirSync(dir);
-                for (const file of files) {
-                    const fullPath = path.join(dir, file);
-                    const stats = fs.statSync(fullPath);
+                for (const item of items) {
+                    const fullPath = path.join(dir, item);
+                    let stats;
+                    try {
+                        stats = fs.statSync(fullPath);
+                    } catch (e) { continue; }
+
                     if (stats.isDirectory()) {
-                        const found = findFile(fullPath, name);
+                        const found = findFile(fullPath);
                         if (found) return found;
-                    } else {
-                        console.log(`[VPN Engine] Checking file: ${file}`);
-                        if (file.toLowerCase() === name.toLowerCase()) {
-                            return fullPath;
-                        }
+                    } else if (item.toLowerCase() === finalBinName.toLowerCase()) {
+                        return fullPath;
                     }
                 }
                 return null;
             };
 
-            const foundBin = findFile(tempExtract, finalBinName);
+            const foundBin = findFile(tempExtract);
             if (foundBin) {
-                console.log(`[VPN Engine] SUCCESS: Found binary at ${foundBin}. Moving to ${finalBinPath}`);
+                console.log(`[VPN Engine] Binary found at ${foundBin}`);
                 fs.copyFileSync(foundBin, finalBinPath);
                 if (!isWin) fs.chmodSync(finalBinPath, '755');
             } else {
-                const allFiles = fs.readdirSync(tempExtract, { recursive: true });
-                console.error('[VPN Engine] Binary not found. Archive contents:', allFiles);
-                throw new Error(`Kritik Hata: Arşiv içinde ${finalBinName} bulunamadı. Arşiv içeriği loglara yazıldı.`);
+                // Log root contents for debugging if search fails
+                const rootContents = fs.readdirSync(tempExtract);
+                console.error('[VPN Engine] Binary search failed. Root contents:', rootContents);
+                throw new Error(`Arşiv içinde ${finalBinName} dosyası bulunamadı.`);
             }
         } catch (err) {
-            console.error('[VPN Engine] Extraction/Search Error:', err);
-            throw new Error(`Dosya çıkarma hatası: ${err.message}`);
+            console.error('[VPN Engine] Extraction Error:', err);
+            throw new Error(`Dosya çıkarma işlemi başarısız oldu: ${err.message}`);
         } finally {
-            // Clean up temp folder
-            try { 
-                if (fs.existsSync(tempExtract)) {
-                    fs.rmSync(tempExtract, { recursive: true, force: true });
-                }
-            } catch (e) {
-                console.warn('[VPN Engine] Temp cleanup failed:', e.message);
-            }
+            // Delay cleanup slightly to avoid file locking issues on Windows
+            setTimeout(() => {
+                try { 
+                    if (fs.existsSync(tempExtract)) {
+                        fs.rmSync(tempExtract, { recursive: true, force: true });
+                    }
+                } catch (e) { /* silent cleanup fail */ }
+            }, 1000);
         }
 
-        // Final sanity check
+        // Stability re-check
         if (!fs.existsSync(finalBinPath)) {
-            throw new Error(`Kritik Hata: Dosya çıkartıldı denildi ama ${finalBinPath} konumunda yok.`);
+            throw new Error(`Kritik: Dosya başarıyla çıkartıldı denildi ama hedef konumda (${finalBinPath}) yok.`);
         }
     }
 
