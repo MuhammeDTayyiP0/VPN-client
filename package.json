@@ -10,7 +10,7 @@
     "build:all": "electron-builder --win nsis portable --linux deb AppImage",
     "postinstall": "electron-builder install-app-deps"
   },
-  "author": "VPN Sunucu",
+  "author": "VPN Sunucu <support@geldesat.com>",
   "license": "ISC",
   "dependencies": {},
   "devDependencies": {
