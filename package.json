@@ -18,20 +18,14 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.vpnsunucu.client",
-    "productName": "VPN Client",
+    "appId": "com.geldesat.vpn-client",
+    "productName": "GGL VPN Client",
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
     "files": [
-      "main.js",
-      "preload.js",
-      "vpn-engine.js",
-      "auth.js",
-      "proxy-manager.js",
-      "renderer/**/*",
-      "build/icon.*"
+      "**/*"
     ],
     "extraResources": [],
     "win": {

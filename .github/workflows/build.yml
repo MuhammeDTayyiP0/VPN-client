@@ -10,7 +10,10 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,20 +27,35 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Electron App
+      - name: Linux Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot dpkg libarchive-tools
+
+      - name: Build Electron App (Windows)
+        if: matrix.os == 'windows-latest'
         run: npm run build:win
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Release
+      - name: Build Electron App (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run build:linux
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create / Update Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
           files: |
             dist/*.exe
+            dist/*.deb
+            dist/*.AppImage
             dist/*.blockmap
-          tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
           draft: false
           prerelease: false
         env:
@@ -46,5 +64,8 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: vpn-client-build-v${{ github.run_number }}
-          path: dist/*.exe
+          name: vpn-client-${{ matrix.os }}-v1.0.${{ github.run_number }}
+          path: |
+            dist/*.exe
+            dist/*.deb
+            dist/*.AppImage

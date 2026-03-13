@@ -108,49 +108,52 @@ class VpnEngine {
 
     extractBinary(archivePath, targetDir, innerDir) {
         const isWin = process.platform === 'win32';
-        const finalBinPath = path.join(targetDir, isWin ? 'sing-box.exe' : 'sing-box');
+        const finalBinName = isWin ? 'sing-box.exe' : 'sing-box';
+        const finalBinPath = path.join(targetDir, finalBinName);
 
-        if (isWin) {
-            // Use PowerShell to extract zip on Windows
-            const { execSync } = require('child_process');
-            const tempExtract = path.join(targetDir, '_extract');
-            fs.mkdirSync(tempExtract, { recursive: true });
+        const { execSync } = require('child_process');
+        const tempExtract = path.join(targetDir, '_extract_temp_' + Date.now());
+        fs.mkdirSync(tempExtract, { recursive: true });
 
-            console.log('[VPN Engine] Extracting zip via PowerShell...');
-            execSync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${tempExtract}' -Force"`, {
-                windowsHide: true
-            });
-
-            // Find and move the binary
-            const extractedBin = path.join(tempExtract, innerDir, 'sing-box.exe');
-            if (fs.existsSync(extractedBin)) {
-                fs.copyFileSync(extractedBin, finalBinPath);
+        try {
+            if (isWin) {
+                console.log('[VPN Engine] Extracting zip via PowerShell...');
+                execSync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${tempExtract}' -Force"`, {
+                    windowsHide: true
+                });
             } else {
-                throw new Error(`Extraction failed: ${extractedBin} not found in archive.`);
+                console.log('[VPN Engine] Extracting tar.gz via tar...');
+                execSync(`tar -xzf "${archivePath}" -C "${tempExtract}"`, { stdio: 'pipe' });
             }
 
-            // Clean up
-            fs.rmSync(tempExtract, { recursive: true, force: true });
-        } else {
-            // Use tar on Linux
-            const { execSync } = require('child_process');
-            execSync(`tar -xzf "${archivePath}" -C "${targetDir}"`, { stdio: 'pipe' });
+            // SMART SEARCH: Recursively find the binary file
+            const findFile = (dir, name) => {
+                const files = fs.readdirSync(dir);
+                for (const file of files) {
+                    const fullPath = path.join(dir, file);
+                    if (fs.statSync(fullPath).isDirectory()) {
+                        const found = findFile(fullPath, name);
+                        if (found) return found;
+                    } else if (file === name) {
+                        return fullPath;
+                    }
+                }
+                return null;
+            };
 
-            const extractedBin = path.join(targetDir, innerDir, 'sing-box');
-            if (fs.existsSync(extractedBin)) {
-                fs.copyFileSync(extractedBin, finalBinPath);
-                fs.chmodSync(finalBinPath, '755');
+            const foundBin = findFile(tempExtract, finalBinName);
+            if (foundBin) {
+                console.log(`[VPN Engine] Found binary at: ${foundBin}`);
+                fs.copyFileSync(foundBin, finalBinPath);
+                if (!isWin) fs.chmodSync(finalBinPath, '755');
             } else {
-                throw new Error(`Extraction failed: ${extractedBin} not found in archive.`);
+                throw new Error(`Critical: ${finalBinName} not found in archive after search.`);
             }
-
-            // Clean inner dir
-            const innerPath = path.join(targetDir, innerDir);
-            if (fs.existsSync(innerPath)) {
-                fs.rmSync(innerPath, { recursive: true, force: true });
-            }
+        } finally {
+            // Clean up temp folder
+            try { fs.rmSync(tempExtract, { recursive: true, force: true }); } catch (e) {}
         }
-        
+
         // Final sanity check
         if (!fs.existsSync(finalBinPath)) {
             throw new Error(`Critical error: target binary not found at ${finalBinPath} after extraction.`);
