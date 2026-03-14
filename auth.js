@@ -136,19 +136,20 @@ class Auth {
             });
 
             const cleanup = () => {
-                try {
-                    server.close();
-                    this.callbackServer = null;
-                } catch (e) { /* ignore */ }
+                if (this.callbackServer) {
+                    try {
+                        this.callbackServer.close();
+                        this.callbackServer = null;
+                    } catch (e) { /* ignore */ }
+                }
             };
 
-            // Listen on a random port
+            // Explicitly bind to 127.0.0.1 (to avoid IPv6 ::1 issues on Windows)
             server.listen(0, '127.0.0.1', async () => {
                 const port = server.address().port;
                 this.callbackServer = server;
 
                 redirectUri = `http://127.0.0.1:${port}/callback`;
-                // Fetch Client ID for login URL (this keeps the client code clean of credentials)
                 let googleClientId = await this.getGoogleClientId();
 
                 const loginUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
@@ -162,10 +163,9 @@ class Auth {
                 console.log(`[Auth] Opening Google OAuth at port ${port}`);
                 shell.openExternal(loginUrl);
 
-                // Timeout after 5 minutes
                 setTimeout(() => {
                     cleanup();
-                    reject(new Error('Login timeout'));
+                    reject(new Error('Login timeout: 5 minutes passed without completion.'));
                 }, 300000);
             });
 
@@ -177,10 +177,7 @@ class Auth {
 
     async exchangeCodeWithServer(code, redirectUri) {
         console.log('[Auth] Delegating code exchange to backend...');
-        const postData = JSON.stringify({
-            code: code,
-            redirect_uri: redirectUri
-        });
+        const postData = JSON.stringify({ code, redirect_uri: redirectUri });
 
         return new Promise((resolve, reject) => {
             const serverUrl = new URL(this.getServerUrl());
@@ -192,7 +189,7 @@ class Auth {
                     'Content-Type': 'application/json',
                     'Content-Length': Buffer.byteLength(postData),
                 },
-                timeout: 30000
+                timeout: 15000 // Match server timeout
             }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
@@ -215,8 +212,13 @@ class Auth {
                 });
             });
 
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('Sunucu Yanıt Vermedi (Timeout). Sunucu internete veya Google API\'ye erişemiyor olabilir.'));
+            });
+
             req.on('error', (err) => {
-                reject(new Error('Network error connecting to auth server: ' + err.message));
+                reject(new Error('Bağlantı hatası: ' + err.message));
             });
 
             req.write(postData);
