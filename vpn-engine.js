@@ -523,6 +523,7 @@ class VpnEngine {
             const userInfo = Buffer.from(url.username, 'base64').toString();
             const [method, ...passwordParts] = userInfo.split(':');
             const password = passwordParts.join(':');
+            const params = Object.fromEntries(url.searchParams);
 
             const outbound = {
                 type: "shadowsocks",
@@ -532,6 +533,14 @@ class VpnEngine {
                 method: method,
                 password: password,
             };
+
+            // If it's a plugin link (like v2ray-plugin for WebSocket), use multiplexing
+            if (params.plugin && params.plugin.includes('v2ray-plugin')) {
+                outbound.multiplex = {
+                    enabled: true,
+                    padding: true
+                };
+            }
 
             return outbound;
         } catch (e) {
