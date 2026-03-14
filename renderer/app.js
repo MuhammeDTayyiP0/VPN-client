@@ -379,20 +379,23 @@ async function updateStats() {
     const limitBytes = limitGb * 1024 * 1024 * 1024;
     
     // Usage stat
-    document.getElementById('stat-usage').textContent = formatBytes(usageBytes);
-    
     const cardUsage = document.getElementById('card-usage');
     const progUsage = document.getElementById('progress-usage');
     
     if (limitBytes > 0) {
+        document.getElementById('stat-usage').textContent = formatBytes(usageBytes) + " kullanıldı";
+        
         let percent = (usageBytes / limitBytes) * 100;
         if (percent > 100) percent = 100;
-        progUsage.style.setProperty('--progress', `${percent}%`);
+        let remainingPct = 100 - percent;
+        
+        progUsage.style.setProperty('--progress', `${remainingPct}%`);
         
         if (percent >= 90) cardUsage.classList.add('danger');
         else cardUsage.classList.remove('danger');
     } else {
-        progUsage.style.setProperty('--progress', '0%');
+        document.getElementById('stat-usage').textContent = formatBytes(usageBytes);
+        progUsage.style.setProperty('--progress', '100%');
         cardUsage.classList.remove('danger');
     }
 
