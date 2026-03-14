@@ -283,6 +283,11 @@ function updateUserInfo() {
     document.getElementById('user-email').textContent = email;
     document.getElementById('user-avatar').textContent = email.charAt(0).toUpperCase();
 
+    const packageEl = document.getElementById('user-package');
+    if (packageEl) {
+        packageEl.textContent = currentUser.package_name || 'Standart';
+    }
+
     const statusEl = document.getElementById('user-status');
     if (currentUser.active) {
         statusEl.textContent = 'Aktif';
