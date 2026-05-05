@@ -14,6 +14,13 @@ if (!gotTheLock) {
 app.commandLine.appendSwitch('disable-http-cache');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
+// Ignore self-signed certificate errors for VPN server connections
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+    // Allow connections to our VPN server even with self-signed certificates
+    event.preventDefault();
+    callback(true);
+});
+
 let mainWindow = null;
 let tray = null;
 const vpnEngine = new VpnEngine();

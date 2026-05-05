@@ -59,7 +59,7 @@ class VpnEngine {
         const binDir = this.getBinDir();
         fs.mkdirSync(binDir, { recursive: true });
 
-        const version = '1.11.0';
+        const version = '1.31.9';
         const platform = process.platform === 'win32' ? 'windows' : 'linux';
         const arch = process.arch === 'x64' ? 'amd64' : process.arch;
         const ext = process.platform === 'win32' ? '.zip' : '.tar.gz';
@@ -325,11 +325,13 @@ class VpnEngine {
                     {
                         tag: "remote-dns",
                         address: "https://1.1.1.1/dns-query",
+                        address_resolver: "local-dns",
                         detour: "proxy"
                     },
                     {
                         tag: "local-dns",
-                        address: "local"
+                        address: "https://1.1.1.1/dns-query",
+                        detour: "direct"
                     }
                 ],
                 rules: [
@@ -337,7 +339,8 @@ class VpnEngine {
                         outbound: ["any"],
                         server: "local-dns"
                     }
-                ]
+                ],
+                strategy: "prefer_ipv4"
             },
             inbounds: [
                 {
@@ -397,7 +400,7 @@ class VpnEngine {
                 outbound.tls = {
                     enabled: true,
                     server_name: params.sni || host,
-                    insecure: false,
+                    insecure: true,
                 };
             }
 
@@ -446,7 +449,7 @@ class VpnEngine {
                 outbound.tls = {
                     enabled: true,
                     server_name: json.sni || json.add,
-                    insecure: false,
+                    insecure: true,
                 };
             }
 
@@ -490,7 +493,7 @@ class VpnEngine {
                 outbound.tls = {
                     enabled: true,
                     server_name: params.sni || host,
-                    insecure: false,
+                    insecure: true,
                 };
             }
 

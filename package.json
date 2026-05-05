@@ -1,6 +1,6 @@
 {
   "name": "vpn-client",
-  "version": "1.0.0",
+  "version": "1.31.9",
   "description": "VPN Client — Cross-platform Desktop Application",
   "main": "main.js",
   "scripts": {

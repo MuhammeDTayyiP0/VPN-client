@@ -189,7 +189,8 @@ class Auth {
                     'Content-Type': 'application/json',
                     'Content-Length': Buffer.byteLength(postData),
                 },
-                timeout: 15000 // Match server timeout
+                timeout: 15000, // Match server timeout
+                rejectUnauthorized: false,
             }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
@@ -233,7 +234,7 @@ class Auth {
         const url = new URL('/api/auth/google/client-id', serverUrl);
 
         return new Promise((resolve, reject) => {
-            const req = client.get(url, (res) => {
+            const req = client.get(url, { rejectUnauthorized: false }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
