@@ -202,7 +202,7 @@ async function handleConnectToggle() {
         const binCheck = await api.vpnEnsureBinary();
         if (binCheck && binCheck.error) {
             setConnectState('disconnected');
-            toast('sing-box indirilemedi: ' + binCheck.error, 'error');
+            toast(binCheck.error, 'error');
             return;
         }
 

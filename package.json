@@ -5,9 +5,15 @@
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
-    "build:win": "electron-builder --win nsis portable",
-    "build:linux": "electron-builder --linux deb AppImage",
-    "build:all": "electron-builder --win nsis portable --linux deb AppImage",
+    "download:singbox": "node scripts/download-singbox.js",
+    "download:singbox:win": "node scripts/download-singbox.js --win",
+    "download:singbox:linux": "node scripts/download-singbox.js --linux",
+    "download:singbox:all": "node scripts/download-singbox.js --all",
+    "prebuild:win": "node scripts/download-singbox.js --win",
+    "build:win": "npm run prebuild:win && electron-builder --win nsis portable",
+    "prebuild:linux": "node scripts/download-singbox.js --linux",
+    "build:linux": "npm run prebuild:linux && electron-builder --linux deb AppImage",
+    "build:all": "node scripts/download-singbox.js --all && electron-builder --win nsis portable --linux deb AppImage",
     "postinstall": "electron-builder install-app-deps"
   },
   "author": "VPN Sunucu <support@geldesat.com>",
@@ -27,7 +33,13 @@
     "files": [
       "**/*"
     ],
-    "extraResources": [],
+    "extraResources": [
+      {
+        "from": "build/singbox/${os}",
+        "to": "singbox",
+        "filter": ["**/*"]
+      }
+    ],
     "win": {
       "icon": "build/icon.ico",
       "target": [
