@@ -417,6 +417,14 @@ async function updateStats() {
     const usage = await api.getUsage();
     if (!usage) return;
 
+    if (usage.kick) {
+        toast('Bağlantınız sunucu tarafından kesildi!', 'warning');
+        const status = await api.vpnStatus();
+        if (status && status.connected) {
+            await api.vpnDisconnect();
+        }
+    }
+
     if (currentUser) {
         if (currentUser.active === 1 && usage.active === 0) {
             toast('Hesabınız pasife alındı, bağlantı kesiliyor...', 'danger');
@@ -536,7 +544,7 @@ function startPolling() {
                 setConnectState('disconnected');
             }
         }
-    }, 3000);
+    }, 1500);
 }
 
 function stopPolling() {

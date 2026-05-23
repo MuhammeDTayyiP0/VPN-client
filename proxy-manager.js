@@ -67,6 +67,15 @@ class ProxyManager {
     async disableWindows() {
         try {
             execSync(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`, { windowsHide: true });
+            execSync(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer /t REG_SZ /d "" /f`, { windowsHide: true });
+            
+            // Force settings to refresh in some environments
+            try {
+                execSync(`powershell -Command "$s = @'
+[DllImport(\\"wininet.dll\\")]
+public static extern bool InternetSetOption(IntPtr h, int o, IntPtr b, int l);
+'@; $t = Add-Type -MemberDefinition $s -Name 'WinInet' -Namespace 'Win32' -PassThru; $t::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0); $t::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)"`, { windowsHide: true });
+            } catch (e) { /* ignore */ }
 
             console.log('[Proxy] Windows proxy disabled.');
         } catch (e) {
