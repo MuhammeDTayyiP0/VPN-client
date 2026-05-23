@@ -41,7 +41,7 @@ function createWindow() {
         resizable: false,
         maximizable: false,
         fullscreenable: false,
-        icon: path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+        icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -140,11 +140,10 @@ function updateTrayMenu() {
 }
 
 function createTray() {
-    const iconPath = path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+    const iconPath = path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
     let trayIcon;
     try {
         trayIcon = nativeImage.createFromPath(iconPath);
-        trayIcon = trayIcon.resize({ width: 16, height: 16 });
     } catch (e) {
         trayIcon = nativeImage.createEmpty();
     }
@@ -178,6 +177,12 @@ ipcMain.handle('window:maximize', () => {
 
 ipcMain.handle('window:close', () => {
     mainWindow?.hide();
+});
+
+ipcMain.handle('app:quit', async () => {
+    app.isQuitting = true;
+    await performCleanup();
+    app.quit();
 });
 
 ipcMain.handle('app:platform', () => {
@@ -245,6 +250,21 @@ ipcMain.handle('vpn:disconnect', async () => {
         await vpnEngine.disconnect();
         updateTrayMenu();
         return { success: true };
+    } catch (e) {
+        return { error: e.message };
+    }
+});
+
+ipcMain.handle('vpn:find-fastest', async () => {
+    try {
+        const links = auth.getVpnLinks();
+        if (!links || links.length === 0) return { error: 'No links available' };
+        const fastest = await vpnEngine.findFastest(links);
+        if (fastest) {
+            return { success: true, fastest };
+        } else {
+            return { error: 'No responsive servers found' };
+        }
     } catch (e) {
         return { error: e.message };
     }

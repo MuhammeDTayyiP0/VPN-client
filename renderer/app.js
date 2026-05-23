@@ -24,6 +24,15 @@ let selectedProtocol = null;
 let pollTimer = null;
 let isConnecting = false;
 
+function loadVpnLinks(links) {
+    if (!links || links.length === 0) {
+        vpnLinks = [];
+        return;
+    }
+    const autoLink = { type: 'auto', protocol: 'En Hızlı (Otomatik)', link: 'auto' };
+    vpnLinks = [autoLink, ...links];
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -44,7 +53,7 @@ async function init() {
         const session = await api.getSession();
         if (session && session.user) {
             currentUser = session.user;
-            vpnLinks = session.vpn_links || [];
+            loadVpnLinks(session.vpn_links);
             showMainScreen();
         } else {
             showScreen('login');
@@ -77,6 +86,7 @@ function setupEventListeners() {
     document.getElementById('btn-settings').addEventListener('click', openSettings);
     document.getElementById('btn-settings-back').addEventListener('click', closeSettings);
     document.getElementById('btn-logout').addEventListener('click', handleLogout);
+    document.getElementById('btn-quit')?.addEventListener('click', () => api.quitApp());
 
     // System Tray Protocol Selection
     if (api.onTraySelectProtocol) {
@@ -126,7 +136,7 @@ async function handleGoogleLogin() {
 
     if (result && result.success) {
         currentUser = result.user;
-        vpnLinks = result.vpn_links || [];
+        loadVpnLinks(result.vpn_links);
         toast('Giriş başarılı!', 'success');
         showMainScreen();
     } else {
@@ -198,6 +208,29 @@ async function handleConnectToggle() {
 
         setConnectState('connecting');
 
+        let protocolToConnect = selectedProtocol.link;
+
+        if (protocolToConnect === 'auto') {
+            document.getElementById('connect-label').textContent = 'En hızlı sunucu aranıyor...';
+            const res = await api.vpnFindFastest();
+            if (res && res.success && res.fastest) {
+                protocolToConnect = res.fastest.link;
+                const index = vpnLinks.findIndex(l => l.link === protocolToConnect);
+                if (index !== -1) {
+                    selectedProtocol = vpnLinks[index];
+                    // update dropdown visual without rebuilding everything
+                    document.getElementById('dropdown-selected-text').textContent = selectedProtocol.protocol || selectedProtocol.type;
+                    const optionsList = document.getElementById('dropdown-options');
+                    optionsList.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+                    optionsList.querySelector(`.dropdown-item[data-index="${index}"]`)?.classList.add('active');
+                }
+            } else {
+                setConnectState('disconnected');
+                toast(res?.error || 'Uygun sunucu bulunamadı', 'error');
+                return;
+            }
+        }
+
         // Ensure binary first
         const binCheck = await api.vpnEnsureBinary();
         if (binCheck && binCheck.error) {
@@ -206,7 +239,7 @@ async function handleConnectToggle() {
             return;
         }
 
-        const result = await api.vpnConnect(selectedProtocol.link);
+        const result = await api.vpnConnect(protocolToConnect);
         if (result && result.success) {
             setConnectState('connected');
             toast('Bağlandı!', 'success');

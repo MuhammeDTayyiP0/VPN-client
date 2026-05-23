@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     close: () => ipcRenderer.invoke('window:close'),
     getPlatform: () => ipcRenderer.invoke('app:platform'),
     getVersion: () => ipcRenderer.invoke('app:version'),
+    quitApp: () => ipcRenderer.invoke('app:quit'),
 
     // Auth
     loginWithGoogle: () => ipcRenderer.invoke('auth:login-google'),
@@ -20,6 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     vpnDisconnect: () => ipcRenderer.invoke('vpn:disconnect'),
     vpnStatus: () => ipcRenderer.invoke('vpn:status'),
     vpnEnsureBinary: () => ipcRenderer.invoke('vpn:ensure-binary'),
+    vpnFindFastest: () => ipcRenderer.invoke('vpn:find-fastest'),
     onTraySelectProtocol: (callback) => ipcRenderer.on('tray:select-protocol', (_event, link) => callback(link)),
 
     // Usage

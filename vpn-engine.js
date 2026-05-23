@@ -190,6 +190,60 @@ class VpnEngine {
         this.currentLink = null;
     }
 
+    async findFastest(links) {
+        if (!links || links.length === 0) return null;
+        
+        const net = require('net');
+        
+        const tests = links.map(linkObj => {
+            return new Promise((resolve, reject) => {
+                const config = this.generateClientConfig(linkObj.link);
+                if (!config || !config.outbounds || !config.outbounds[0]) return reject(new Error('Invalid link'));
+                
+                const outbound = config.outbounds[0];
+                if (!outbound.server || !outbound.server_port) return reject(new Error('No server info'));
+                
+                const socket = new net.Socket();
+                let isResolved = false;
+                
+                socket.setTimeout(3000); // 3 seconds timeout
+                
+                socket.on('connect', () => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        socket.destroy();
+                        resolve(linkObj);
+                    }
+                });
+                
+                socket.on('error', (err) => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        socket.destroy();
+                        reject(err);
+                    }
+                });
+                
+                socket.on('timeout', () => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        socket.destroy();
+                        reject(new Error('Timeout'));
+                    }
+                });
+                
+                socket.connect(outbound.server_port, outbound.server);
+            });
+        });
+        
+        try {
+            return await Promise.any(tests);
+        } catch (e) {
+            console.error('[VPN Engine] All latency tests failed.');
+            return null;
+        }
+    }
+
     // ─── CONFIG GENERATION ────────────────────────────────────────
 
     generateClientConfig(link) {

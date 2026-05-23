@@ -441,6 +441,10 @@ body {
     transition: var(--transition);
 }
 
+.connect-ring.connecting .connect-icon {
+    animation: spin 1s linear infinite;
+}
+
 .connect-label {
     font-size: 14px;
     color: var(--text-secondary);
