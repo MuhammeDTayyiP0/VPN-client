@@ -206,6 +206,17 @@ async function handleConnectToggle() {
             return;
         }
 
+        if (currentUser) {
+            if (currentUser.active === 0) {
+                toast('Hesabınız pasif durumda, bağlanılamaz!', 'danger');
+                return;
+            }
+            if (currentUser.limit_exceeded) {
+                toast('Kota limitiniz dolmuş, bağlanılamaz!', 'danger');
+                return;
+            }
+        }
+
         setConnectState('connecting');
 
         let protocolToConnect = selectedProtocol.link;
@@ -406,6 +417,24 @@ async function updateStats() {
     const usage = await api.getUsage();
     if (!usage) return;
 
+    if (currentUser) {
+        if (currentUser.active === 1 && usage.active === 0) {
+            toast('Hesabınız pasife alındı, bağlantı kesiliyor...', 'danger');
+            const status = await api.vpnStatus();
+            if (status && status.connected) {
+                await api.vpnDisconnect();
+            }
+        } else if (currentUser.active === 0 && usage.active === 1) {
+            toast('Hesabınız aktifleştirildi', 'success');
+        }
+        currentUser.active = usage.active;
+        currentUser.speed_limit = usage.speed_limit;
+        currentUser.package_name = usage.package_name;
+        currentUser.limit_exceeded = usage.limit_exceeded;
+        
+        updateUserInfo();
+    }
+
     const period = usage.data_limit_period || 'none';
     const limitGb = usage.data_limit || 0;
     const usageBytes = period !== 'none' ? (usage.period_usage || 0) : (usage.current_usage || 0);
@@ -507,7 +536,7 @@ function startPolling() {
                 setConnectState('disconnected');
             }
         }
-    }, 10000);
+    }, 3000);
 }
 
 function stopPolling() {
